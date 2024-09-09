@@ -24,8 +24,8 @@ $ pip install gdzapi --upgrade
 Here's a basic example of how to use the synchronous GDZ class:
 
 ```python
-
-from gdzapi.gdzapi import GDZ
+# First type of usage
+from gdzapi import GDZ
 
 gdz = GDZ()
 
@@ -39,16 +39,37 @@ for subject in gdz.subjects:
 
         if pages:
             solutions = gdz.get_gdz(pages[0].url)
-            print(f"Number of solutions: {len(solutions)}")
+            image_url = solutions[0].image_src
+            print(image_url)
+
+-----
+            
+# Second type of usage
+from gdzapi import GDZ
+
+gdz = GDZ()
+
+subjects = gdz.subjects
+for subject in subjects:
+    if subject.name == "Биология":
+        book = subject.books[0]
+        print(f"Book: {book.name}")
+        
+        page = book.pages[0]
+        
+        if page:
+            solutions = page[0].solutions
+            image_url = solutions[0].image_src
+            print(image_url)
 ```
 -----
 ### Asynchronous Usage
 Here's how to use the asynchronous AsyncGDZ class:
 
 ```python
+# First type of usage
 import asyncio
-from gdzapi.gdzapi import AsyncGDZ
-
+from gdzapi import AsyncGDZ
 
 async def main():
     async with AsyncGDZ() as gdz:
@@ -65,12 +86,38 @@ async def main():
 
                 if pages:
                     solutions = await gdz.get_gdz(pages[0].url)
-                    print(f"Number of solutions: {len(solutions)}")
+                    print(solutions[0].image_src)
 
+if __name__ == "__main__":
+    asyncio.run(main())
+
+-----
+    
+# Second type of usage
+import asyncio
+from gdzapi import AsyncGDZ
+
+async def main():
+    async with AsyncGDZ() as gdz:
+        subjects = await gdz.subjects
+        for subject in subjects:
+            if subject.name == "Биология":
+                books = await subject.books
+                if books:
+                    book = books[0]
+                    print(f"Book: {book.name}")
+                
+                pages = await book.pages
+                if pages:
+                    solutions = await pages.solutions
+                    print(solutions[0].image_src)
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+
+
 -----
 ## API Reference
 

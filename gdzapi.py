@@ -1,7 +1,8 @@
 import requests
 from bs4 import BeautifulSoup as BS
 from .models import *
-from typing import List
+from typing import List, Optional
+
 import aiohttp
 import logging
 
@@ -22,8 +23,12 @@ class GDZ:
         self.session = requests.Session()
         self.response = self.session.get(self.BASE_URL, headers=self.headers)
         self.soup = BS(self.response.text, 'lxml')
+        self._subjects: Optional[List[Subject]] = None
+        self._books: Optional[List[Book]] = None
+        self._pages: Optional[List[Page]] = None
+        self._solutions: Optional[List[Solution]] = None
 
-    def get(self, url: str) -> BS | None:
+    def __get(self, url: str) -> BS | None:
         try:
             response = self.session.get(self.BASE_URL + url, headers=self.headers)
             response.raise_for_status()
@@ -59,11 +64,18 @@ class GDZ:
 
     @property
     def subjects(self) -> List[Subject]:
+        if self._subjects is None:
+            self._subjects = self._get_subjects()
+            for subject in self._subjects:
+                subject._gdz = self
+        return self._subjects
+
+    def _get_subjects(self) -> List[Subject]:
         return [
             Subject(
-                id = id_,
-                name = subject.text.strip(),
-                url = subject.get("href")
+                id=id_,
+                name=subject.text.strip(),
+                url=subject.get("href")
             )
             for id_, subject in enumerate(
                 self.soup.select(
@@ -72,56 +84,75 @@ class GDZ:
                 start=1)
         ]
 
-    def get_books(self, subject: Subject) -> List[Book]:
+    def _get_books(self, subject: Subject) -> List[Book]:
         return [
             Book(
-                id = id_,
-                name = book.get("title"),
-                url = book.get("href"),
-                authors = book.select("div > p > span")[0].text.split(", "),
-                years = book.select("div > p")[-1].text.strip(),
-
+                id=id_,
+                name=book.get("title"),
+                url=book.get("href"),
+                authors=book.select("div > p > span")[0].text.split(", "),
             )
             for id_, book in enumerate(
-                self.get(subject.url).select(
+                self.__get(subject.url).select(
                     selector=self.BOOKS_SELECTOR
+                ),
+                start=1
+            )
+        ]
+    def get_books(self, subject: Subject) -> List[Book]:
+        if self._books is None:
+            self._books = self._get_books(subject)
+            for book in self._books:
+                book._gdz = self
+        return self._books
+
+
+    def _get_pages(self, url: str) -> List[Page]:
+        return [
+            Page(
+                id=id_,
+                number=page.text.strip(),
+                url=page.get("href"),
+                _gdz=self
+            )
+            for id_, page in enumerate(
+                self.__get(url).select_one(
+                    selector=self.PAGES_SELECTOR
+                ).select(
+                    selector="div > a"
                 ),
                 start=1)
         ]
 
-
     def get_pages(self, url: str) -> List[Page]:
-        return [
-            Page(
-                id = id_,
-                number = page.text.strip(),
-                url = page.get("href")
-            )
-            for id_, page in enumerate(
-                self.get(url).select_one(
-                    selector=self.PAGES_SELECTOR
-                    ).select(
-                        selector="div > a"
-                    ),
-                start=1)
-        ]
+        if self._pages is None:
+            self._pages = self._get_pages(url)
+            for page in self._pages:
+                page._gdz = self
+        return self._pages
 
-    def get_gdz(self, url: str) -> List[Solution]:
+    def _get_gdz(self, url: str) -> List[Solution]:
         return [
             Solution(
-                id = id_,
-                title = solution.get("alt").split("  ")[-1].strip(),
-                image_src = solution.get("src")
+                id=id_,
+                title=solution.get("alt").split("  ")[-1].strip(),
+                image_src=solution.get("src")
             )
             for id_, solution in enumerate(
-                self.get(url).select(
+                self.__get(url).select(
                     selector=self.GDZ_SELECTOR
                 ),
                 start=1)
         ]
 
-class AsyncGDZ:
+    def get_gdz(self, url: str) -> List[Solution]:
+        if self._solutions is None:
+            self._solutions = self._get_gdz(url)
+            for solution in self._solutions:
+                solution._gdz = self
+        return self._solutions
 
+class AsyncGDZ:
     CLASSES_SELECTOR = "body > div > div.page > aside > div.sidebar__main > div > ul > li"
     SUBJECTS_SELECTOR = "body > div.layout > div.page > main > table > tbody > tr > td.table-section-heading > a"
     BOOKS_SELECTOR = "body > div > div.page > main > ul.book__list > li > a"
@@ -136,31 +167,35 @@ class AsyncGDZ:
         }
         self.session = None
         self.soup = None
+        self._subjects: Optional[List[Subject]] = None
+        self._books: Optional[List[Book]] = None
+        self._pages: Optional[List[Page]] = None
+        self._solutions: Optional[List[Solution]] = None
 
     async def __aenter__(self):
         self.session = aiohttp.ClientSession()
+        self.soup = await self.__aget("")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.session.close()
 
-    async def get(self, url: str) -> BS | None:
+    async def __aget(self, url: str) -> BS | None:
         try:
             async with self.session.get(self.BASE_URL + url, headers=self.headers) as response:
                 response.raise_for_status()
-                text = await response.text()
-                return BS(text, "lxml")
+                return BS(await response.text(), "lxml")
         except aiohttp.ClientError as e:
             self.logger.error(f"Error fetching {url}: {e}")
             return None
 
-    async def initialize(self):
-        self.soup = await self.get("")
+    @property
+    async def get_html(self) -> str:
+        async with self.session.get(self.BASE_URL, headers=self.headers) as response:
+            return await response.text()
 
     @property
     async def classes(self) -> List[Class]:
-        if not self.soup:
-            await self.initialize()
         return [
             Class(
                 id=id_,
@@ -173,13 +208,20 @@ class AsyncGDZ:
                         url=subject.get("href")
                     ) for id_, subject in enumerate(class_.select(selector="ul > li > a")[1:], 1)
                 ]
-            ) for id_, class_ in enumerate(self.soup.select(selector=self.CLASSES_SELECTOR), start=1)
+            ) for id_, class_ in enumerate(self.soup.select(
+                selector=self.CLASSES_SELECTOR
+            ), start=1)
         ]
 
     @property
     async def subjects(self) -> List[Subject]:
-        if not self.soup:
-            await self.initialize()
+        if self._subjects is None:
+            self._subjects = await self._get_subjects()
+            for subject in self._subjects:
+                subject._gdz = self
+        return self._subjects
+
+    async def _get_subjects(self) -> List[Subject]:
         return [
             Subject(
                 id=id_,
@@ -187,13 +229,15 @@ class AsyncGDZ:
                 url=subject.get("href")
             )
             for id_, subject in enumerate(
-                self.soup.select(selector=self.SUBJECTS_SELECTOR),
+                self.soup.select(
+                    selector=self.SUBJECTS_SELECTOR
+                ),
                 start=1)
         ]
 
-    async def get_books(self, subject: Subject) -> List[Book]:
-        soup = await self.get(subject.url)
-        if not soup:
+    async def _get_books(self, subject: Subject) -> List[Book]:
+        soup = await self.__aget(subject.url)
+        if soup is None:
             return []
         return [
             Book(
@@ -201,34 +245,49 @@ class AsyncGDZ:
                 name=book.get("title"),
                 url=book.get("href"),
                 authors=book.select("div > p > span")[0].text.split(", "),
-                years=book.select("div > p")[-1].text.strip(),
             )
             for id_, book in enumerate(
                 soup.select(selector=self.BOOKS_SELECTOR),
-                start=1)
+                start=1
+            )
         ]
 
-    async def get_pages(self, url: str) -> List[Page]:
-        soup = await self.get(url)
-        if not soup:
+    async def get_books(self, subject: Subject) -> List[Book]:
+        if self._books is None:
+            self._books = await self._get_books(subject)
+            for book in self._books:
+                book._gdz = self
+        return self._books
+
+    async def _get_pages(self, url: str) -> List[Page]:
+        soup = await self.__aget(url)
+        if soup is None:
             return []
         pages_container = soup.select_one(selector=self.PAGES_SELECTOR)
-        if not pages_container:
+        if pages_container is None:
             return []
         return [
             Page(
                 id=id_,
                 number=page.text.strip(),
-                url=page.get("href")
+                url=page.get("href"),
+                _gdz=self
             )
             for id_, page in enumerate(
                 pages_container.select(selector="div > a"),
                 start=1)
         ]
 
-    async def get_gdz(self, url: str) -> List[Solution]:
-        soup = await self.get(url)
-        if not soup:
+    async def get_pages(self, url: str) -> List[Page]:
+        if self._pages is None:
+            self._pages = await self._get_pages(url)
+            for page in self._pages:
+                page._gdz = self
+        return self._pages
+
+    async def _get_gdz(self, url: str) -> List[Solution]:
+        soup = await self.__aget(url)
+        if soup is None:
             return []
         return [
             Solution(
@@ -240,3 +299,10 @@ class AsyncGDZ:
                 soup.select(selector=self.GDZ_SELECTOR),
                 start=1)
         ]
+
+    async def get_gdz(self, url: str) -> List[Solution]:
+        if self._solutions is None:
+            self._solutions = await self._get_gdz(url)
+            for solution in self._solutions:
+                solution._gdz = self
+        return self._solutions
