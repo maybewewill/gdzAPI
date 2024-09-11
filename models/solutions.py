@@ -2,5 +2,5 @@ from pydantic import BaseModel
 
 class Solution(BaseModel):
     id: int
-    title: str
+    title: str | None
     image_src: str

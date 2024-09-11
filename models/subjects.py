@@ -10,6 +10,7 @@ class Subject(BaseModel):
     _books: Optional[List[Book]] = None
     _gdz: Optional['GDZ'] = None
 
+
     @property
     def books(self) -> List[Book]:
         if self._books is None:

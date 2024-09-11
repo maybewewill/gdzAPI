@@ -64,6 +64,7 @@ class GDZ:
 
     @property
     def subjects(self) -> List[Subject]:
+        self._subjects = None
         if self._subjects is None:
             self._subjects = self._get_subjects()
             for subject in self._subjects:
@@ -100,6 +101,7 @@ class GDZ:
             )
         ]
     def get_books(self, subject: Subject) -> List[Book]:
+        self._books = None
         if self._books is None:
             self._books = self._get_books(subject)
             for book in self._books:
@@ -125,6 +127,7 @@ class GDZ:
         ]
 
     def get_pages(self, url: str) -> List[Page]:
+        self._pages = None
         if self._pages is None:
             self._pages = self._get_pages(url)
             for page in self._pages:
@@ -146,11 +149,19 @@ class GDZ:
         ]
 
     def get_gdz(self, url: str) -> List[Solution]:
+        self._solutions = None
         if self._solutions is None:
             self._solutions = self._get_gdz(url)
             for solution in self._solutions:
                 solution._gdz = self
         return self._solutions
+
+    def search_books(self, query: str) -> List[Book]:
+        all_books = []
+        for subject in self.subjects:
+            all_books.extend(self.get_books(subject))
+
+        return [book for book in all_books if query.lower() in book.name.lower()]
 
 class AsyncGDZ:
     CLASSES_SELECTOR = "body > div > div.page > aside > div.sidebar__main > div > ul > li"
@@ -215,6 +226,7 @@ class AsyncGDZ:
 
     @property
     async def subjects(self) -> List[Subject]:
+        self._subjects = None
         if self._subjects is None:
             self._subjects = await self._get_subjects()
             for subject in self._subjects:
@@ -253,6 +265,7 @@ class AsyncGDZ:
         ]
 
     async def get_books(self, subject: Subject) -> List[Book]:
+        self._books = None
         if self._books is None:
             self._books = await self._get_books(subject)
             for book in self._books:
@@ -279,6 +292,7 @@ class AsyncGDZ:
         ]
 
     async def get_pages(self, url: str) -> List[Page]:
+        self._pages = None
         if self._pages is None:
             self._pages = await self._get_pages(url)
             for page in self._pages:
@@ -301,8 +315,16 @@ class AsyncGDZ:
         ]
 
     async def get_gdz(self, url: str) -> List[Solution]:
+        self._solutions = None
         if self._solutions is None:
             self._solutions = await self._get_gdz(url)
             for solution in self._solutions:
                 solution._gdz = self
         return self._solutions
+
+    async def search_books(self, query: str) -> List[Book]:
+        all_books = []
+        for subject in await self.subjects:
+            all_books.extend(await self.get_books(subject))
+
+        return [book for book in all_books if query.lower() in book.name.lower()]

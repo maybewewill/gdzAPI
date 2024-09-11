@@ -16,7 +16,7 @@ An asynchronous Python library for accessing GDZ (Готовые домашни�
 ## Installation
 ### Stable version
 ```bash
-$ pip install gdzapi --upgrade
+pip install gdzapi --upgrade
 ```
 -----
 ## Usage
@@ -42,7 +42,7 @@ for subject in gdz.subjects:
             image_url = solutions[0].image_src
             print(image_url)
 
------
+#--------------------------------------------------------------
             
 # Second type of usage
 from gdzapi import GDZ
@@ -58,7 +58,7 @@ for subject in subjects:
         page = book.pages[0]
         
         if page:
-            solutions = page[0].solutions
+            solutions = page.solutions
             image_url = solutions[0].image_src
             print(image_url)
 ```
@@ -91,7 +91,7 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 
------
+#--------------------------------------------------------------
     
 # Second type of usage
 import asyncio
@@ -109,45 +109,73 @@ async def main():
                 
                 pages = await book.pages
                 if pages:
-                    solutions = await pages.solutions
+                    solutions = await pages[0].solutions
                     print(solutions[0].image_src)
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+## Euroki example
+```python
 
+from gdzapi import Euroki
 
+e = Euroki()
+books = e.search_books("Биология 10 класс")
+for book in books:
+    if "Каменский" in book.authors:
+        downloadable_images = []
+        for i in book.pages:
+            for j in i.solutions:
+                downloadable_images.append(j.image_src)
+        print(downloadable_images)
+```
+## MegaResheba example
+```python
+from gdzapi import MegaResheba
+
+m = MegaResheba()
+for s in m.subjects:
+    if s.name == "История":
+        try:
+            print(s.books[0].pages[0].solutions[0].image_src)
+        except:
+            # This is means that there are no solutions
+            print("No solutions")
+```
 
 -----
 ## API Reference
 
 
-### GDZ Class
+### GDZ/Euroki/MegaResheba Class
 
-classes: List of available classes
+``classes``: List of available classes
 
-subjects: List of available subjects
+``subjects``: List of available subjects
 
-get_books(subject: Subject) -> List[Book]: Get books for a subject
+``get_books(subject: Subject) -> List[Book]:`` Get books for a subject
 
-get_pages(url: str) -> List[Page]: Get pages for a given URL
+``get_pages(url: str) -> List[Page]:`` Get pages for a given URL
 
-get_gdz(url: str) -> List[Solution]: Get solutions for a given URL
+``get_gdz(url: str) -> List[Solution]:`` Get solutions for a given URL
+
+``search_books(query: str) -> List[Book]:`` Search books for a given query
 
 -----
 ### AsyncGDZ Class
 
-classes: Asynchronous property returning list of available classes
+``classes``: Asynchronous property returning list of available classes
 
-subjects: Asynchronous property returning list of available subjects
+``subjects``: Asynchronous property returning list of available subjects
 
-get_books(subject: Subject) -> List[Book]: Asynchronous method to get books for a subject
+``get_books(subject: Subject) -> List[Book]:`` Asynchronous method to get books for a subject
 
-get_pages(url: str) -> List[Page]: Asynchronous method to get pages for a given URL
+``get_pages(url: str) -> List[Page]:`` Asynchronous method to get pages for a given URL
 
-get_gdz(url: str) -> List[Solution]: Asynchronous method to get solutions for a given URL
+``get_gdz(url: str) -> List[Solution]:`` Asynchronous method to get solutions for a given URL
 
------
+``search_books(query: str) -> List[Book]:`` Asynchronous method to search books for a given query
 
 ## License
 
